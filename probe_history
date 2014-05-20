@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+
+import time
+import argparse
+import subprocess
+import sys
+
+import pymongo
+
+
+VERSION = '0.01'
+
+def process_condor_history(db, history_output):
+    """
+    Process condor history and then insert it into the DB
+    """
+    history_records = db.history_records
+    for line in history_output.readlines():
+        if line.strip() != "":
+            fields = line.split('=')
+            job_record[fields[0].strip()] = fields[1].strip()
+        else:
+            history_records.insert(job_record)
+            job_record = {}
+
+
+
+def get_condor_history(start_time=None, end_time=None):
+    """
+    Get the condor history for the specified time period
+    """
+    hist_command = ["/usr/bin/condor_history",
+                    "-l",
+                    "-constraint ",
+                    "\"'((JobCurrentStartDate > %s) && "
+                    "(JobCurrentStartDate < %s))'\"" % (start_time, end_time)]
+    try:
+        history_output = subprocess.check_output(hist_command)
+        return history_output
+    except subprocess.CalledProcessError:
+        sys.stderr.write("Can't call condor_history")
+        sys.exit(1)
+
+
+
+def run_main():
+    """
+    Main function, parse arguments and then
+    """
+    parser = argparse.ArgumentParser(description='Insert condor job history into DB')
+    parser.add_argument('start', nargs='2', default=None,
+                        help='String indicating start time in YYYY-MM-DD HH:MM:SS'
+                             'format with hours going from 0 to 23 ')
+    parser.add_argument('end', nargs='2', default=None,
+                        help='String indicating end time in YYYY-MM-DD HH:MM:SS'
+                             'format with hours going from 0 to 23 ')
+    parser.add_argument('process_hours', type=int, nargs='2', help='Start time',
+                        default=None)
+    parser.add_argument('config_file', nargs='2', default=None,
+                        help='Path to file with configuration information')
+    parser.add_argument('--version', action='version', version=VERSION)
+    args = parser.parse_args()
+    # need to have either process_hours specified or start and end specified
+   #
+    if ((args.process_hours is None and
+                 args.start is None and
+                 args.end is None) or
+            (args.process_hours is not None and
+                     args.start is not None) or
+            (args.process_hours is not None and
+                     args.end is not None)):
+        sys.stderr.write("Either process_hours or start and end need to be given\n")
+        sys.exit(1)
+
+    if args.process_hours:
+        end_time = time.localtime()
+        end_time.tm_secs = 0
+        end_time.tm_min = 0
+        start_time = end_time
+        start_time.tm_hour -= args.process_hours
+        end_time = int(round(time.mktime(end_time)))
+        start_time = int(round(time.mktime(start_time)))
+    else:
+        start_time = int(round(time.mktime(time.strptime(args.start,
+                                                         "%Y-%m-%D %H:%M:%S"))))
+        end_time = int(round(time.mktime(time.strptime(args.end,
+                                                       "%Y-%m-%D %H:%M:%S"))))
+
+
+    db_client = pymongo.Client()
+    db = db_client.condor_history
+    history_output = get_condor_history(start_time, end_time)
+    process_condor_history(db, history_output)
+
+
+
+if __name__ == '__main__':
+    run_main()
+
+
+
+
