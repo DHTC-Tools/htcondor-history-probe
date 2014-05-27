@@ -18,15 +18,20 @@ def process_condor_history(db, history_output):
     history_records = db.history_records
     str_var = cStringIO.StringIO(history_output)
     job_record = {}
+    job_count = 0
+    line_count = 0
     for line in str_var.readlines():
+        line_count += 1
         if line.strip() != "":
             fields = line.split('=')
             job_record[fields[0].strip()] = fields[1].strip()
         else:
             job_record['_id'] = job_record['ClusterId'] + "." + job_record['ProcId']
             history_records.insert(job_record)
+            job_count += 1
             job_record = {}
-
+    sys.stdout.write("Read %s lines from condor_history\n" % line_count)
+    sys.stdout.write("Inserted %s records into db\n" % job_count)
 
 
 def get_condor_history(start_time=None, end_time=None):
