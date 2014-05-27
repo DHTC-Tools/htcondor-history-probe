@@ -27,7 +27,12 @@ def process_condor_history(db, history_output):
             job_record[fields[0].strip()] = fields[1].strip()
         else:
             job_record['_id'] = job_record['ClusterId'] + "." + job_record['ProcId']
-            history_records.insert(job_record)
+            try:
+                history_records.insert(job_record)
+            except pymongo.errors.OperationFailure, e:
+                sys.stderr.write("Got error inserting record into "
+                                 "DB:\n%s\nRecord:%s\n" % (e, job_record))
+
             job_count += 1
             job_record = {}
     sys.stdout.write("Read %s lines from condor_history\n" % line_count)
