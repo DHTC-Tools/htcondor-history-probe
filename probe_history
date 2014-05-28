@@ -20,6 +20,8 @@ def process_condor_history(db, history_output):
     job_record = {}
     job_count = 0
     line_count = 0
+    duplicate_records = 0
+    error_records = 0
     for line in str_var.readlines():
         line_count += 1
         if line.strip() != "":
@@ -28,15 +30,22 @@ def process_condor_history(db, history_output):
         else:
             job_record['_id'] = job_record['ClusterId'] + "." + job_record['ProcId']
             try:
+                record = history_records.find_one({"_id": job_record['_id']})
+                if record is not None:
+                    duplicate_records += 1
+                    continue
                 history_records.insert(job_record)
+                job_count += 1
             except pymongo.errors.OperationFailure, e:
+                error_records += 1
                 sys.stderr.write("Got error inserting record into "
                                  "DB:\n%s\nRecord:%s\n" % (e, job_record))
 
-            job_count += 1
             job_record = {}
     sys.stdout.write("Read %s lines from condor_history\n" % line_count)
     sys.stdout.write("Inserted %s records into db\n" % job_count)
+    sys.stdout.write("Skipped %s duplicate records\n" % duplicate_records)
+    sys.stdout.write("Encountered %s records with errors\n" % duplicate_records)
 
 
 def get_condor_history(start_time=None, end_time=None):
@@ -101,7 +110,6 @@ def run_main():
                                                          "%Y-%m-%D %H:%M:%S"))))
         end_time = int(round(time.mktime(time.strptime(args.end,
                                                        "%Y-%m-%D %H:%M:%S"))))
-
 
     db_client = pymongo.MongoClient(host='mc.mwt2.org', port=27017)
     db = db_client.condor_history
