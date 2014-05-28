@@ -74,7 +74,7 @@ def run_main():
     parser.add_argument('--start', default=None,
                         help='String indicating start time in YYYY-MM-DD HH:MM:SS'
                              'format with hours going from 0 to 23 ')
-    parser.add_argument('--end', nargs='2', default=None,
+    parser.add_argument('--end', default=None,
                         help='String indicating end time in YYYY-MM-DD HH:MM:SS'
                              'format with hours going from 0 to 23 ')
     parser.add_argument('--process_hours', type=int, help='Start time',
