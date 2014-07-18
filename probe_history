@@ -111,7 +111,7 @@ def run_main():
         end_time = int(round(time.mktime(time.strptime(args.end,
                                                        "%Y-%m-%D %H:%M:%S"))))
 
-    db_client = pymongo.MongoClient(host='mc.mwt2.org', port=27017)
+    db_client = pymongo.MongoClient(host='db.mwt2.org', port=27017)
     db = db_client.condor_history
     history_output = get_condor_history(start_time, end_time)
     process_condor_history(db, history_output)
