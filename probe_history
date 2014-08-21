@@ -5,12 +5,34 @@ import argparse
 import subprocess
 import sys
 import cStringIO
+import re
+import json
+import urllib2
 
 import pymongo
 
 
-VERSION = '0.01'
+VERSION = '0.5'
+GAE_URL = 'http://g-treadmill.appspot.com/testjobs'
 
+int_re = re.compile(r'^\d+$')
+float_re = re.compile(r'^\d+\.\d+$')
+quoted_re = re.compile(r'^"(.*)"$')
+
+def post_results(job_record):
+    """
+    Post json record of results to google app engine db
+    """
+    post_string = json.dumps(job_record)
+    request = urllib2.Request(GAE_URL, data = post_string)
+    try:
+        f = urllib2.urlopen(request)
+    except urllib2.URLEroor:
+        sys.stderr.write("Got an error posting to {0}\n".format(GAE_URL))
+    if f.getcode() != 200:
+        sys.stderr.write("Got error posting to {0}: {1}\n".format(GAE_URL, f.getcode()))
+    
+        
 def process_condor_history(db, history_output):
     """
     Process condor history and then insert it into the DB
@@ -26,15 +48,28 @@ def process_condor_history(db, history_output):
         line_count += 1
         if line.strip() != "":
             fields = line.split('=')
-            job_record[fields[0].strip()] = fields[1].strip()
+            field_val = "".join(fields[1:]).strip()
+            # now try to convert the value to the correct type
+            try:
+                if int_re.match(field_val):
+                    field_val = int(field_val)
+                elif float_re.match(field_val):
+                    field_val = float(field_val)
+                elif quoted_re.match(field_val):
+                    match = quoted_re.match(field_val)
+                    field_val = match.group(1)
+            except ValueError:
+                pass
+            job_record[fields[0].strip()] = field_val
         else:
-            job_record['_id'] = job_record['ClusterId'] + "." + job_record['ProcId']
+            job_record['_id'] = "%s.%s" % (job_record['ClusterId'], job_record['ProcId'])
             try:
                 record = history_records.find_one({"_id": job_record['_id']})
                 if record is not None:
                     duplicate_records += 1
                     continue
                 history_records.insert(job_record)
+                post_results(job_record)
                 job_count += 1
             except pymongo.errors.OperationFailure, e:
                 error_records += 1
